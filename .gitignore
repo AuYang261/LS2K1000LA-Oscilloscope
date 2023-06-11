@@ -1,0 +1,5 @@
+build*/
+bin/
+.vscode/
+*.gz
+qcustomplot/
