@@ -3,3 +3,4 @@ bin/
 .vscode/
 *.gz
 qcustomplot/
+*.pro.user
