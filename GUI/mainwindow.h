@@ -4,8 +4,8 @@
 #include <QMainWindow>
 
 #include "qcustomplot.h"
-#include "slide_window.h"
-#include "spi.h"
+#include "../slide_window.h"
+#include "../spi.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -22,7 +22,20 @@ class MainWindow : public QMainWindow {
 
     void buildChart();
 
+public slots:
+    void TimeData_Update(void);
+
+
    private:
     Ui::MainWindow *ui;
+    QCPGraph *pGraph1_1;
+    // 绘图控件的指针
+    QCustomPlot *customPlot;
+
+    const uint max_sample_value = 0xfff;
+    const double max_voltage = 3.3;
+
+    void QPlot_init(QCustomPlot *customPlot);
+    void Show_Plot(QCustomPlot *customPlot, QVector<double> x, QVector<double> y);
 };
 #endif  // MAINWINDOW_H

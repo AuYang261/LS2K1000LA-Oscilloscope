@@ -2,7 +2,8 @@
 
 unsigned char* map_base;
 
-int spi_init() {
+void spi_init() {
+#ifndef _WIN32
     printf("%s\n", __FUNCTION__);
     int dev_fd;
     dev_fd = open("/dev/mem", O_RDWR | O_SYNC);
@@ -36,10 +37,11 @@ int spi_init() {
 
     *SPCR |= SPCR_SPE;  // set
     printf("%s done\n", __FUNCTION__);
-    return 0;
+#endif
 }
 
 static __uint32_t spi_send_4bytes(__uint32_t val) {
+#ifndef _WIN32
     // 片选CSN1
     SET_SPI(SFC_SOFTCS, 0x02);
 
@@ -78,8 +80,10 @@ static __uint32_t spi_send_4bytes(__uint32_t val) {
     SET_SPI(SFC_SOFTCS, 0x22);
 
     return (ret1 << 24) | (ret2 << 16) | (ret3 << 8) | ret4;
+#endif
 }
 static __uint16_t spi_send_2bytes(__uint16_t val) {
+#ifndef _WIN32
     // 片选CSN1
     SET_SPI(SFC_SOFTCS, 0x02);
 
@@ -106,9 +110,11 @@ static __uint16_t spi_send_2bytes(__uint16_t val) {
     SET_SPI(SFC_SOFTCS, 0x22);
 
     return (ret1 << 8) | ret2;
+#endif
 }
 
 void spi_read(__uint16_t* buf, int len) {
+#ifndef _WIN32
     int cnt;
     // printf("%s\n", __FUNCTION__);
     for (cnt = 0; cnt < len; cnt++) {
@@ -116,12 +122,16 @@ void spi_read(__uint16_t* buf, int len) {
         // ((__uint32_t*)buf)[cnt] = spi_send_4bytes(0x12345678);
     }
     // printf("%s done\n", __FUNCTION__);
+#endif
 }
 void spi_write(__uint16_t* buf, int len) {
+#ifndef _WIN32
     int cnt;
     printf("%s\n", __FUNCTION__);
     for (cnt = 0; cnt < len; cnt++) {
         spi_send_2bytes(buf[cnt]);
     }
     printf("%s done\n", __FUNCTION__);
+#endif
 }
+

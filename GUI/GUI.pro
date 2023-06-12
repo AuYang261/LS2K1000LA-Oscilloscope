@@ -17,7 +17,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
     ../slide_window.cpp \
-    ../spi.c \
+    ../spi.cpp \
     main.cpp \
     mainwindow.cpp \
     qcustomplot.cpp
@@ -25,6 +25,7 @@ SOURCES += \
 HEADERS += \
     ../slide_window.h \
     ../spi.h \
+    ../types.h \
     mainwindow.h \
     qcustomplot.h
 

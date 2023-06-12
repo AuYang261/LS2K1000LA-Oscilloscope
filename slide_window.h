@@ -1,10 +1,10 @@
 #ifndef __SLIDE_WINDOWN_H__
 #define __SLIDE_WINDOWN_H__
 
-#include <unistd.h>
-
 #include <iostream>
 #include <vector>
+
+#include "types.h"
 
 struct Data {
     __uint16_t data;
@@ -38,6 +38,7 @@ class Slide_Window final {
     Sequence_t& get_seq();
     __int64_t get_error_cnt() const { return error_cnt; }
     void display(size_t begin, size_t end) const;
+    void clear() {sequence.clear(); window_begin = error_cnt = 0;}
 
    private:
     Slide_Window();
