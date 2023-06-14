@@ -12,8 +12,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <time.h>
+#include <unistd.h>
 
 extern unsigned char *map_base;
 
@@ -49,17 +49,14 @@ extern unsigned char *map_base;
 #define RFFULL (1 << 2)  // 读寄存器满
 #define RFEMPTY 1
 
-#define KSEG1_STORE8(addr, val) \
-    (*(volatile char *)(addr) = val)
-#define KSEG1_LOAD8(addr) \
-    (*(volatile char *)(addr))
+#define KSEG1_STORE8(addr, val) (*(volatile char *)(addr) = val)
+#define KSEG1_LOAD8(addr) (*(volatile char *)(addr))
 
 #define SET_SPI(addr, val) KSEG1_STORE8(addr, val)
 #define GET_SPI(addr) KSEG1_LOAD8(addr)
 
-void spi_init();
+int spi_init();
 void spi_read(__uint16_t *buf, int len);
 void spi_write(__uint16_t *buf, int len);
-
 
 #endif

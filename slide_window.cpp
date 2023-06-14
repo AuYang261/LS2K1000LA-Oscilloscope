@@ -37,11 +37,6 @@ void Slide_Window::add_data(__uint16_t input) {
                 // 已被获取，且相等，为重复数据
                 if (prob_iter->data == data.data) {
                     in_window = true;
-                } else {
-                    in_window = true;
-                    // if (!sequence[window_begin].got) {
-                    //     display_window();
-                    // }
                 }
             } else {
                 // 未被获取，直接赋值
@@ -54,7 +49,7 @@ void Slide_Window::add_data(__uint16_t input) {
             for (__uint8_t last = (sequence.back().seq_num + 1) & 0xf;
                  last != data.seq_num; last++, last &= 0xf) {
                 sequence.push_back(Data(last));
-                if (sequence.size() - window_begin >= window_max_len) {
+                if (sequence.size() - 1 - window_begin >= window_max_len) {
                     if (!(sequence.begin() + window_begin++)->got) {
                         error_cnt++;
                     }
@@ -75,7 +70,7 @@ void Slide_Window::add_data(__uint16_t input) {
 Sequence_t& Slide_Window::get_seq() { return sequence; }
 
 void Slide_Window::display(size_t begin, size_t end) const {
-    for (int i = begin; i < sequence.size() && i < end; i++) {
+    for (size_t i = begin; i < sequence.size() && i < end; i++) {
         std::cout << sequence[i] << i << "# ";
     }
     std::cout << std::endl;

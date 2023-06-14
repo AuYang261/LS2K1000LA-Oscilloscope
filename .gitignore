@@ -4,3 +4,5 @@ bin/
 *.gz
 qcustomplot/
 *.pro.user
+main
+spi_test

@@ -2,7 +2,7 @@
 
 unsigned char* map_base;
 
-void spi_init() {
+int spi_init() {
 #ifndef _WIN32
     printf("%s\n", __FUNCTION__);
     int dev_fd;
@@ -23,7 +23,7 @@ void spi_init() {
     *SPSR = 0xc0;  // 8'b1100_0000
 
     // 原始时钟频率为100MHz
-    // 分频系数为8
+    // 分频系数为16
     *SPCR &= ~SPCR_SPR_1;
     *SPCR &= ~SPCR_SPR_2;
     *SPER |= SPER_SPRE_1;
@@ -31,13 +31,14 @@ void spi_init() {
 
     *SPCR &= ~SPCR_CPOL;  // 时钟极性
     *SPCR &= ~SPCR_CPHA;  // 时钟相位
-    *SPER |= SPER_MODE;   // 1模式,标准SPI实现
+    *SPER &= ~SPER_MODE;  // 0模式,兼容模式
 
     *SPCR &= ~SPCR_SPIE;  // disable interuption
 
     *SPCR |= SPCR_SPE;  // set
     printf("%s done\n", __FUNCTION__);
 #endif
+    return 0;
 }
 
 static __uint32_t spi_send_4bytes(__uint32_t val) {
@@ -134,4 +135,3 @@ void spi_write(__uint16_t* buf, int len) {
     printf("%s done\n", __FUNCTION__);
 #endif
 }
-

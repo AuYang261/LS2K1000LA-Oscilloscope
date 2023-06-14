@@ -37,8 +37,13 @@ class Slide_Window final {
     void add_data(__uint16_t input);
     Sequence_t& get_seq();
     __int64_t get_error_cnt() const { return error_cnt; }
-    void display(size_t begin, size_t end) const;
-    void clear() {sequence.clear(); window_begin = error_cnt = 0;}
+    size_t get_window_begin() const { return window_begin; }
+    size_t size() const { return sequence.size(); }
+    void display(size_t begin = 0, size_t end = SIZE_MAX) const;
+    void clear() {
+        sequence.clear();
+        window_begin = error_cnt = 0;
+    }
 
    private:
     Slide_Window();
