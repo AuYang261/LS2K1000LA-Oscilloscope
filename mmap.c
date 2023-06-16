@@ -1,3 +1,4 @@
+#include <bits/time.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +17,10 @@
 // #define GPIO_PIN        39
 
 int main(int argc, char **argv) {
+    if (argc != 4) {
+        printf("Usage: ./mmap PIN 1(IN)/2(OUT) FREQ");
+        return -1;
+    }
     int i;
     int dev_fd, offset, gpio_move;
     dev_fd = open("/dev/mem", O_RDWR | O_SYNC);
@@ -34,8 +39,7 @@ int main(int argc, char **argv) {
     ////打印该寄存器地址的value
 
     int GPIO_PIN;
-    printf("input GPIO_PIN:");
-    scanf("%d", &GPIO_PIN);
+    sscanf(argv[1], "%d", &GPIO_PIN);
 
     if (GPIO_PIN > 31) {
         offset = 4;
@@ -46,8 +50,11 @@ int main(int argc, char **argv) {
     }
 
     int func;
-    printf("input function:1(in), 2(out):");
-    scanf("%d", &func);
+    sscanf(argv[2], "%d", &func);
+    int freq;
+    sscanf(argv[3], "%d", &freq);
+    struct timespec last, cur;
+    clock_gettime(CLOCK_REALTIME, &last);
 
     if (func == 2) {
         *(volatile unsigned int *)(map_base + GPIO_EN + offset) &=
@@ -61,8 +68,17 @@ int main(int argc, char **argv) {
                 *(volatile unsigned int *)(map_base + GPIO_OUT + offset) &=
                     ~(1 << gpio_move);  // 输出底
             }
-            printf("out %d\r", value);
-            usleep(1000 * 1000);
+            while (1) {
+                clock_gettime(CLOCK_REALTIME, &cur);
+                if ((cur.tv_sec - last.tv_sec) * 1000 * 1000 * 1000 +
+                        cur.tv_nsec - last.tv_nsec >
+                    1000 * 1000 * 1000 / freq / 2) {
+                    break;
+                }
+            }
+            last = cur;
+            // printf("out %d\r", value);
+            // usleep(1000 * 1000 / freq / 2);
             // getchar();
             value = !value;
         }
