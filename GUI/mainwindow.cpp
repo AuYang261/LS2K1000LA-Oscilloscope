@@ -3,10 +3,11 @@
 #include "ui_mainwindow.h"
 
 void MainWindow::spi_get_data() {
-    uint16_t buf[8];
+    uint16_t buf[512];
+    struct timeval dwStart, dwEnd;
     Slide_Window &sw = Slide_Window::get_instance();
     uint64_t cnt = 0;
-    clock_t start = clock();
+    gettimeofday(&dwStart, NULL);
     while (1) {
         spi_read(buf, sizeof(buf) / sizeof(buf[0]));
         for (size_t i = 0; i < sizeof(buf) / sizeof(buf[0]); i++) {
@@ -16,15 +17,15 @@ void MainWindow::spi_get_data() {
             sw.add_data(buf[i]);
             mtx.unlock();
         }
-        cnt += sizeof(buf) / sizeof(buf[0]);
-        // std::cout << sw.get_window_begin();
-        // sw.display();
-        int ms = (clock() - start) * 1000 / CLOCKS_PER_SEC;
-        printf(
-            "%d samples in %dms, %d per second, "
-            "error_cnt=%d,error_rate=%d/10000\r",
-            cnt, ms, 1000 * cnt / (ms == 0 ? 1 : ms), sw.get_error_cnt(),
-            sw.get_error_cnt() * 10000 / cnt);
+        // cnt += sizeof(buf) / sizeof(buf[0]);
+        // gettimeofday(&dwEnd, NULL);
+        // int64_t us = 1000 * 1000 * (dwEnd.tv_sec - dwStart.tv_sec) +
+        //              (dwEnd.tv_usec - dwStart.tv_usec);
+        // printf(
+        //     "%ld samples in %dms, %ld per second, "
+        //     "error_cnt=%ld, error_rate=%ld/10000\r",
+        //     cnt, us / 1000, 1000 * 1000 * cnt / (us == 0 ? 1 : us),
+        //     sw.get_error_cnt(), sw.get_error_cnt() * 10000 / sw.size());
     }
 }
 
@@ -53,10 +54,10 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
     pGraph1_1->setPen(QPen(Qt::red));
 
     // 设置坐标轴名称
-    customPlot->xAxis->setLabel("X");
+    customPlot->xAxis->setLabel("time(ns)");
     customPlot->yAxis->setLabel("Y");
 
-    customPlot->yAxis->setRange(0, 3.3);
+    customPlot->yAxis->setRange(0, max_voltage);
 
     // 显示图表的图例
     customPlot->legend->setVisible(true);
@@ -69,21 +70,39 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
 
     // 创建定时器，用于定时生成曲线坐标点数据
     QTimer *timer = new QTimer(this);
-    timer->start(20);
+    timer->start(100);
     connect(timer, SIGNAL(timeout()), this, SLOT(TimeData_Update()));
 }
 
 // 定时器溢出处理槽函数。用来生成曲线的坐标数据。
 void MainWindow::TimeData_Update(void) {
     Slide_Window &sw = Slide_Window::get_instance();
+    if (sw.size() < 2) {
+        return;
+    }
 
     QVector<double> x, y;
-    int i = 0;
+    double time_ns = horizontal_div * scan_speed_ns_per_div;
     mtx.lock();
-    for (auto iter = sw.get_seq().rbegin();
-         iter != sw.get_seq().rend() && i < 200; iter++) {
-        x.push_back(i++);
-        y.push_back(max_voltage * iter->data / 0xfff);
+    auto trigger = sw.get_seq().rbegin() + 1;
+    // 寻找触发点
+    for (; trigger != sw.get_seq().rend() &&
+           trigger - sw.get_seq().rbegin() <
+               trigger_timeout_ns * RT_sampling_rate / 1000 / 1000 / 1000;
+         trigger++) {
+        if (DAC((trigger - 1)->data) > trigger_voltage &&
+            DAC(trigger->data) <= trigger_voltage) {
+            // 触发
+            break;
+        }
+    }
+    for (int cnt = 0;
+         cnt < horizontal_div * horizontal_point_per_div &&
+         cnt * point_per_sampling() < sw.get_seq().rend() - trigger;
+         cnt++) {
+        x.push_back(time_ns);
+        y.push_back(DAC((trigger + cnt * point_per_sampling())->data));
+        time_ns -= scan_speed_ns_per_div / horizontal_point_per_div;
     }
     mtx.unlock();
     Show_Plot(customPlot, x, y);
@@ -99,7 +118,7 @@ void MainWindow::Show_Plot(QCustomPlot *customPlot, QVector<double> x,
     //    pGraph1_1->addData(cnt, num);
     pGraph1_1->setData(x, y);
 
-    customPlot->xAxis->setRange(x[0], x[x.size() - 1]);
+    customPlot->xAxis->setRange(0, horizontal_div * scan_speed_ns_per_div);
     // 更新绘图，这种方式在高填充下太浪费资源。有另一种方式rpQueuedReplot，可避免重复绘图。
     // 最好的方法还是将数据填充、和更新绘图分隔开。将更新绘图单独用定时器更新。例程数据量较少没用单独定时器更新，实际工程中建议大家加上。
     // customPlot->replot();

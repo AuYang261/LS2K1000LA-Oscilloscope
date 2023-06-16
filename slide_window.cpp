@@ -37,12 +37,18 @@ void Slide_Window::add_data(__uint16_t input) {
                 // 已被获取，且相等，为重复数据
                 if (prob_iter->data == data.data) {
                     in_window = true;
+                } else {
+                    // 非重复数据，但忽略
+                    in_window = true;
                 }
             } else {
                 // 未被获取，直接赋值
                 *prob_iter = data;
                 in_window = true;
             }
+        } else if (diff + window_begin > sequence.size()) {
+            // 间隔太大，忽略
+            in_window = true;
         }
         // 扩大窗口
         if (!in_window) {

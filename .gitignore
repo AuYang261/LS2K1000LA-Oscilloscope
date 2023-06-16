@@ -6,3 +6,4 @@ qcustomplot/
 *.pro.user
 main
 spi_test
+mmap
