@@ -17,15 +17,15 @@ void MainWindow::spi_get_data() {
             sw.add_data(buf[i]);
             mtx.unlock();
         }
-        // cnt += sizeof(buf) / sizeof(buf[0]);
-        // gettimeofday(&dwEnd, NULL);
-        // int64_t us = 1000 * 1000 * (dwEnd.tv_sec - dwStart.tv_sec) +
-        //              (dwEnd.tv_usec - dwStart.tv_usec);
-        // printf(
-        //     "%ld samples in %dms, %ld per second, "
-        //     "error_cnt=%ld, error_rate=%ld/10000\r",
-        //     cnt, us / 1000, 1000 * 1000 * cnt / (us == 0 ? 1 : us),
-        //     sw.get_error_cnt(), sw.get_error_cnt() * 10000 / sw.size());
+        cnt += sizeof(buf) / sizeof(buf[0]);
+        gettimeofday(&dwEnd, NULL);
+        int64_t us = 1000 * 1000 * (dwEnd.tv_sec - dwStart.tv_sec) +
+                     (dwEnd.tv_usec - dwStart.tv_usec);
+        printf(
+            "%ld samples in %dms, %ld per second, "
+            "error_cnt=%ld, error_rate=%ld/10000\r",
+            sw.size(), us / 1000, 1000 * 1000 * sw.size() / (us == 0 ? 1 : us),
+            sw.get_error_cnt(), sw.get_error_cnt() * 10000 / sw.size());
     }
 }
 
@@ -54,10 +54,33 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
     pGraph1_1->setPen(QPen(Qt::red));
 
     // 设置坐标轴名称
-    customPlot->xAxis->setLabel("time(ns)");
-    customPlot->yAxis->setLabel("Y");
+    set_Xlable();
+    customPlot->xAxis->setRange(
+        0, horizontal_div * scan_speed_ns_per_div / horizontal_scale());
+    ui->horizontalSlider->setValue(100);
+    ui->horizontalSlider->setPageStep(1);
+    ui->horizontalSlider->setMaximum(100);
+    // 0<=value<=100
+    connect(ui->horizontalSlider, &QSlider::sliderMoved, [this](int value) {
+        // 100<=scan_speed_ns_per_div<=20*1000*1000
+        scan_speed_ns_per_div = 100 * pow(10, value * (log10(2) + 5) / 100);
+        set_Xlable();
+        ui->customPlot->xAxis->setRange(
+            0, horizontal_div * scan_speed_ns_per_div / horizontal_scale());
+    });
 
-    customPlot->yAxis->setRange(0, max_voltage);
+    customPlot->yAxis->setLabel("Voltage(V)");
+    customPlot->yAxis->setRange(0, vertical_div * vertical_mV_per_div / 1000);
+    ui->verticalSlider->setValue(100);
+    ui->verticalSlider->setPageStep(1);
+    ui->verticalSlider->setMaximum(100);
+    // 0<=value<=100
+    connect(ui->verticalSlider, &QSlider::sliderMoved, [this](int value) {
+        // 50<=vertical_mV_per_div<=500
+        vertical_mV_per_div = 50 + 4.5 * value;
+        ui->customPlot->yAxis->setRange(
+            0, vertical_div * vertical_mV_per_div / 1000);
+    });
 
     // 显示图表的图例
     customPlot->legend->setVisible(true);
@@ -84,14 +107,14 @@ void MainWindow::TimeData_Update(void) {
     QVector<double> x, y;
     double time_ns = horizontal_div * scan_speed_ns_per_div;
     mtx.lock();
-    auto trigger = sw.get_seq().rbegin() + 1;
+    auto trigger = sw.get_seq().rbegin();
     // 寻找触发点
-    for (; trigger != sw.get_seq().rend() &&
+    for (; trigger + 1 != sw.get_seq().rend() &&
            trigger - sw.get_seq().rbegin() <
                trigger_timeout_ns * RT_sampling_rate / 1000 / 1000 / 1000;
          trigger++) {
-        if (DAC((trigger - 1)->data) > trigger_voltage &&
-            DAC(trigger->data) <= trigger_voltage) {
+        if (DAC(trigger->data) > trigger_voltage &&
+            DAC((trigger + 1)->data) <= trigger_voltage) {
             // 触发
             break;
         }
@@ -100,7 +123,7 @@ void MainWindow::TimeData_Update(void) {
          cnt < horizontal_div * horizontal_point_per_div &&
          cnt * point_per_sampling() < sw.get_seq().rend() - trigger;
          cnt++) {
-        x.push_back(time_ns);
+        x.push_back(time_ns / horizontal_scale());
         y.push_back(DAC((trigger + cnt * point_per_sampling())->data));
         time_ns -= scan_speed_ns_per_div / horizontal_point_per_div;
     }
@@ -118,7 +141,6 @@ void MainWindow::Show_Plot(QCustomPlot *customPlot, QVector<double> x,
     //    pGraph1_1->addData(cnt, num);
     pGraph1_1->setData(x, y);
 
-    customPlot->xAxis->setRange(0, horizontal_div * scan_speed_ns_per_div);
     // 更新绘图，这种方式在高填充下太浪费资源。有另一种方式rpQueuedReplot，可避免重复绘图。
     // 最好的方法还是将数据填充、和更新绘图分隔开。将更新绘图单独用定时器更新。例程数据量较少没用单独定时器更新，实际工程中建议大家加上。
     // customPlot->replot();
