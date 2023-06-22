@@ -86,10 +86,11 @@ int main(int argc, char **argv) {
         *(volatile unsigned int *)(map_base + GPIO_EN + offset) |=
             (1 << gpio_move);
         while (1) {
-            printf("in %u\n",
+            printf("in %u\r",
                    ((*(volatile unsigned int *)(map_base + GPIO_IN + offset)) >>
                     gpio_move) &
                        1);
+            usleep(1);
         }
     } else {
         printf("invalid func: %d\n", func);

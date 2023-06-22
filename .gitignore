@@ -7,3 +7,4 @@ qcustomplot/
 main
 spi_test
 mmap
+pwm
