@@ -4,7 +4,7 @@
 #include <QMainWindow>
 #include <thread>
 
-#include "../slide_window.h"
+// #include "../slide_window.h"
 #include "../spi.h"
 #include "qcustomplot.h"
 
@@ -40,11 +40,13 @@ class MainWindow : public QMainWindow {
     const int vertical_div = 8;
     const int horizontal_point_per_div = 50;
     int vertical_mV_per_div = 500;
-    const double RT_sampling_rate = 100 * 1000;  // 100kHz
+    const double RT_sampling_rate = 30 * 1000;  // 30kHz
     const double Equivalent_sampling_rate = 200 * 1000 * 1000;
     double scan_speed_ns_per_div = 20 * 1000 * 1000;
     double trigger_voltage = 0.1;
     const double trigger_timeout_ns = 50 * 1000 * 1000;  // 50ms
+    QVector<double> seq;
+
     double horizontal_scale() {
         if (horizontal_div * scan_speed_ns_per_div < 1000) {
             return 1;

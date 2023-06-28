@@ -3,29 +3,36 @@
 #include "ui_mainwindow.h"
 
 void MainWindow::spi_get_data() {
-    uint16_t buf[512];
+    uint16_t buf[4];
     struct timeval dwStart, dwEnd;
-    Slide_Window &sw = Slide_Window::get_instance();
-    uint64_t cnt = 0;
+    // Slide_Window &sw = Slide_Window::get_instance();
+    uint64_t cnt = 0, last_cnt = 0;
     gettimeofday(&dwStart, NULL);
+    int64_t last_us = 0, us = 0;
     while (1) {
         spi_read(buf, sizeof(buf) / sizeof(buf[0]));
         for (size_t i = 0; i < sizeof(buf) / sizeof(buf[0]); i++) {
+            buf[i] >>= 1;
+            buf[i] &= 0xfff;
             // std::cout << "#" << i << " 0x" << std::hex << buf[i] <<
             // std::endl;
             mtx.lock();
-            sw.add_data(buf[i]);
+            // sw.add_data(buf[i]);
+            seq.append(buf[i]);
             mtx.unlock();
         }
         cnt += sizeof(buf) / sizeof(buf[0]);
-        gettimeofday(&dwEnd, NULL);
-        int64_t us = 1000 * 1000 * (dwEnd.tv_sec - dwStart.tv_sec) +
-                     (dwEnd.tv_usec - dwStart.tv_usec);
-        printf(
-            "%ld samples in %dms, %ld per second, "
-            "error_cnt=%ld, error_rate=%ld/10000\r",
-            sw.size(), us / 1000, 1000 * 1000 * sw.size() / (us == 0 ? 1 : us),
-            sw.get_error_cnt(), sw.get_error_cnt() * 10000 / sw.size());
+        do {
+            gettimeofday(&dwEnd, NULL);
+            us = 1000 * 1000 * (dwEnd.tv_sec - dwStart.tv_sec) +
+                 (dwEnd.tv_usec - dwStart.tv_usec);
+        } while (us < last_us + 1000 * 1000 * sizeof(buf) / sizeof(buf[0]) /
+                                    RT_sampling_rate);
+        printf("%ld samples in %dms, %ld per second\r", cnt, us / 1000,
+               1000 * 1000 * (cnt - last_cnt) /
+                   (us - last_us == 0 ? 1 : us - last_us));
+        last_us = us;
+        last_cnt = cnt;
     }
 }
 
@@ -34,7 +41,7 @@ MainWindow::MainWindow(QWidget *parent)
     qDebug() << "MainWindow init" << endl;
     ui->setupUi(this);
     spi_init();
-    Slide_Window::get_instance().init();
+    // Slide_Window::get_instance().init();
 
     customPlot = ui->customPlot;
 
@@ -99,32 +106,31 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
 
 // 定时器溢出处理槽函数。用来生成曲线的坐标数据。
 void MainWindow::TimeData_Update(void) {
-    Slide_Window &sw = Slide_Window::get_instance();
-    if (sw.size() < 2) {
+    // Slide_Window &sw = Slide_Window::get_instance();
+    if (seq.size() < 2) {
         return;
     }
 
     QVector<double> x, y;
     double time_ns = horizontal_div * scan_speed_ns_per_div;
     mtx.lock();
-    auto trigger = sw.get_seq().rbegin();
+    auto trigger = seq.rbegin();
     // 寻找触发点
-    for (; trigger + 1 != sw.get_seq().rend() &&
-           trigger - sw.get_seq().rbegin() <
+    for (; trigger + 1 != seq.rend() &&
+           trigger - seq.rbegin() <
                trigger_timeout_ns * RT_sampling_rate / 1000 / 1000 / 1000;
          trigger++) {
-        if (DAC(trigger->data) > trigger_voltage &&
-            DAC((trigger + 1)->data) <= trigger_voltage) {
+        if (DAC(*trigger) > trigger_voltage &&
+            DAC(*(trigger + 1)) <= trigger_voltage) {
             // 触发
             break;
         }
     }
-    for (int cnt = 0;
-         cnt < horizontal_div * horizontal_point_per_div &&
-         cnt * point_per_sampling() < sw.get_seq().rend() - trigger;
+    for (int cnt = 0; cnt < horizontal_div * horizontal_point_per_div &&
+                      cnt * point_per_sampling() < seq.rend() - trigger;
          cnt++) {
         x.push_back(time_ns / horizontal_scale());
-        y.push_back(DAC((trigger + cnt * point_per_sampling())->data));
+        y.push_back(DAC(*(trigger + cnt * point_per_sampling())));
         time_ns -= scan_speed_ns_per_div / horizontal_point_per_div;
     }
     mtx.unlock();
