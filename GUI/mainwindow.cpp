@@ -60,15 +60,15 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
     // 设置曲线颜色
     pGraph1_1->setPen(QPen(Qt::red));
 
-    // 设置坐标轴名称
+    // 设置坐标轴
     set_Xlable();
     customPlot->xAxis->setRange(
         0, horizontal_div * scan_speed_ns_per_div / horizontal_scale());
-    ui->horizontalSlider->setValue(100);
-    ui->horizontalSlider->setPageStep(1);
-    ui->horizontalSlider->setMaximum(100);
+    ui->XAxisScaler->setMaximum(100);
+    ui->XAxisScaler->setValue(100);
+    ui->XAxisScaler->setPageStep(1);
     // 0<=value<=100
-    connect(ui->horizontalSlider, &QSlider::sliderMoved, [this](int value) {
+    connect(ui->XAxisScaler, &QSlider::sliderMoved, [this](int value) {
         // 100<=scan_speed_ns_per_div<=20*1000*1000
         scan_speed_ns_per_div = 100 * pow(10, value * (log10(2) + 5) / 100);
         set_Xlable();
@@ -77,16 +77,27 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
     });
 
     customPlot->yAxis->setLabel("Voltage(V)");
-    customPlot->yAxis->setRange(0, vertical_div * vertical_mV_per_div / 1000);
-    ui->verticalSlider->setValue(100);
-    ui->verticalSlider->setPageStep(1);
-    ui->verticalSlider->setMaximum(100);
+    customPlot->yAxis->setRange(
+        0, vertical_div * vertical_mV_per_div / vertical_scale());
+    ui->YAxisScaler->setMaximum(100);
+    ui->YAxisScaler->setValue(100);
+    ui->YAxisScaler->setPageStep(1);
     // 0<=value<=100
-    connect(ui->verticalSlider, &QSlider::sliderMoved, [this](int value) {
-        // 50<=vertical_mV_per_div<=500
-        vertical_mV_per_div = 50 + 4.5 * value;
+    connect(ui->YAxisScaler, &QSlider::sliderMoved, [this](int value) {
+        // 2<=vertical_mV_per_div<=500
+        vertical_mV_per_div = 2 + 4.98 * value;
+        set_Ylable();
         ui->customPlot->yAxis->setRange(
-            0, vertical_div * vertical_mV_per_div / 1000);
+            0, vertical_div * vertical_mV_per_div / vertical_scale());
+    });
+
+    ui->TriggerSlider->setValue(0);
+    ui->TriggerSlider->setPageStep(trigger_voltage_mV * 100 / max_voltage_mV);
+    ui->TriggerSlider->setMaximum(100);
+    // 0<=value<=100
+    connect(ui->TriggerSlider, &QSlider::sliderMoved, [this](int value) {
+        // 0<=trigger_voltage<=max_voltage
+        trigger_voltage_mV = max_voltage_mV * value / 100;
     });
 
     // 显示图表的图例
@@ -120,8 +131,8 @@ void MainWindow::TimeData_Update(void) {
            trigger - seq.rbegin() <
                trigger_timeout_ns * RT_sampling_rate / 1000 / 1000 / 1000;
          trigger++) {
-        if (DAC(*trigger) > trigger_voltage &&
-            DAC(*(trigger + 1)) <= trigger_voltage) {
+        if (DAC(*trigger) > trigger_voltage_mV &&
+            DAC(*(trigger + 1)) <= trigger_voltage_mV) {
             // 触发
             break;
         }
@@ -130,7 +141,8 @@ void MainWindow::TimeData_Update(void) {
                       cnt * point_per_sampling() < seq.rend() - trigger;
          cnt++) {
         x.push_back(time_ns / horizontal_scale());
-        y.push_back(DAC(*(trigger + cnt * point_per_sampling())));
+        y.push_back(DAC(*(trigger + cnt * point_per_sampling())) /
+                    vertical_scale());
         time_ns -= scan_speed_ns_per_div / horizontal_point_per_div;
     }
     mtx.unlock();

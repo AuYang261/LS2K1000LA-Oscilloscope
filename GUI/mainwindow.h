@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <iostream>
 #include <thread>
 
 // #include "../slide_window.h"
@@ -35,19 +36,19 @@ class MainWindow : public QMainWindow {
     std::mutex mtx;
 
     const uint max_sample_value = 0xfff;
-    const double max_voltage = 3.3;
+    const double max_voltage_mV = 3300;
     const int horizontal_div = 10;
     const int vertical_div = 8;
     const int horizontal_point_per_div = 50;
     int vertical_mV_per_div = 500;
-    const double RT_sampling_rate = 30 * 1000;  // 30kHz
-    const double Equivalent_sampling_rate = 200 * 1000 * 1000;
+    const double RT_sampling_rate = 100 * 1000;                 // 100kHz
+    const double Equivalent_sampling_rate = 200 * 1000 * 1000;  // 200MHz
     double scan_speed_ns_per_div = 20 * 1000 * 1000;
-    double trigger_voltage = 0.1;
+    double trigger_voltage_mV = 100;
     const double trigger_timeout_ns = 50 * 1000 * 1000;  // 50ms
     QVector<double> seq;
 
-    double horizontal_scale() {
+    double horizontal_scale() const {
         if (horizontal_div * scan_speed_ns_per_div < 1000) {
             return 1;
         } else if (horizontal_div * scan_speed_ns_per_div < 1000 * 1000) {
@@ -57,6 +58,13 @@ class MainWindow : public QMainWindow {
             return 1000 * 1000;
         } else {
             return 1000 * 1000 * 1000;
+        }
+    };
+    double vertical_scale() const {
+        if (vertical_div * vertical_mV_per_div < 1000) {
+            return 1;
+        } else {
+            return 1000;
         }
     };
     void set_Xlable() {
@@ -71,13 +79,21 @@ class MainWindow : public QMainWindow {
             customPlot->xAxis->setLabel("time(s)");
         }
     }
+    void set_Ylable() {
+        auto vs = vertical_scale();
+        if (vs <= 1.0) {
+            customPlot->yAxis->setLabel("Voltage(mV)");
+        } else {
+            customPlot->yAxis->setLabel("Voltage(V)");
+        }
+    }
     // 图中每个点对应的采样点数
     inline double point_per_sampling() const {
         return RT_sampling_rate * scan_speed_ns_per_div /
                horizontal_point_per_div / 1000 / 1000 / 1000;
     }
     inline double DAC(uint16_t value) const {
-        return max_voltage * value / 0xfff;
+        return max_voltage_mV * value / 0xfff;
     }
 
     void QPlot_init(QCustomPlot *customPlot);

@@ -54,6 +54,8 @@ int spi_init() {
     *SPCR &= ~SPCR_SPIE;  // disable interuption
 
     *SPCR |= SPCR_SPE;  // set
+    // 取消片选所有
+    SET_SPI(SFC_SOFTCS, 0xff);
     printf("%s done\n", __FUNCTION__);
 #endif
     return 0;
