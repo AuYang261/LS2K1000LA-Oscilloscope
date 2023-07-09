@@ -3,10 +3,9 @@
 #include "ui_mainwindow.h"
 
 void MainWindow::spi_get_data() {
-    uint16_t buf[4];
+    uint16_t buf[1];
     struct timeval dwStart, dwEnd;
-    // Slide_Window &sw = Slide_Window::get_instance();
-    uint64_t cnt = 0, last_cnt = 0;
+    // uint64_t cnt = 0, last_cnt = 0;
     gettimeofday(&dwStart, NULL);
     int64_t last_us = 0, us = 0;
     while (1) {
@@ -14,25 +13,22 @@ void MainWindow::spi_get_data() {
         for (size_t i = 0; i < sizeof(buf) / sizeof(buf[0]); i++) {
             buf[i] >>= 1;
             buf[i] &= 0xfff;
-            // std::cout << "#" << i << " 0x" << std::hex << buf[i] <<
-            // std::endl;
             mtx.lock();
-            // sw.add_data(buf[i]);
-            seq.append(buf[i]);
+            seq.push_back(buf[i]);
             mtx.unlock();
         }
-        cnt += sizeof(buf) / sizeof(buf[0]);
+        // cnt += sizeof(buf) / sizeof(buf[0]);
         do {
             gettimeofday(&dwEnd, NULL);
             us = 1000 * 1000 * (dwEnd.tv_sec - dwStart.tv_sec) +
                  (dwEnd.tv_usec - dwStart.tv_usec);
         } while (us < last_us + 1000 * 1000 * sizeof(buf) / sizeof(buf[0]) /
                                     RT_sampling_rate);
-        printf("%ld samples in %dms, %ld per second\r", cnt, us / 1000,
-               1000 * 1000 * (cnt - last_cnt) /
-                   (us - last_us == 0 ? 1 : us - last_us));
+        // printf("%ld samples in %dms, %ld per second\r", cnt, us / 1000,
+        //        1000 * 1000 * (cnt - last_cnt) /
+        //            (us - last_us == 0 ? 1 : us - last_us));
         last_us = us;
-        last_cnt = cnt;
+        // last_cnt = cnt;
     }
 }
 
@@ -44,6 +40,9 @@ MainWindow::MainWindow(QWidget *parent)
     // Slide_Window::get_instance().init();
 
     customPlot = ui->customPlot;
+    XAxisScaler = ui->XAxisScaler;
+    YAxisScaler = ui->YAxisScaler;
+    TriggerSlider = ui->TriggerSlider;
 
     spi_thread = std::thread(&MainWindow::spi_get_data, this);
 
@@ -64,11 +63,11 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
     set_Xlable();
     customPlot->xAxis->setRange(
         0, horizontal_div * scan_speed_ns_per_div / horizontal_scale());
-    ui->XAxisScaler->setMaximum(100);
-    ui->XAxisScaler->setValue(100);
-    ui->XAxisScaler->setPageStep(1);
+    XAxisScaler->setMaximum(100);
+    XAxisScaler->setValue(100);
+    XAxisScaler->setPageStep(1);
     // 0<=value<=100
-    connect(ui->XAxisScaler, &QSlider::sliderMoved, [this](int value) {
+    connect(XAxisScaler, &QSlider::sliderMoved, [this](int value) {
         // 100<=scan_speed_ns_per_div<=20*1000*1000
         scan_speed_ns_per_div = 100 * pow(10, value * (log10(2) + 5) / 100);
         set_Xlable();
@@ -79,11 +78,11 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
     customPlot->yAxis->setLabel("Voltage(V)");
     customPlot->yAxis->setRange(
         0, vertical_div * vertical_mV_per_div / vertical_scale());
-    ui->YAxisScaler->setMaximum(100);
-    ui->YAxisScaler->setValue(100);
-    ui->YAxisScaler->setPageStep(1);
+    YAxisScaler->setMaximum(100);
+    YAxisScaler->setValue(100);
+    YAxisScaler->setPageStep(1);
     // 0<=value<=100
-    connect(ui->YAxisScaler, &QSlider::sliderMoved, [this](int value) {
+    connect(YAxisScaler, &QSlider::sliderMoved, [this](int value) {
         // 2<=vertical_mV_per_div<=500
         vertical_mV_per_div = 2 + 4.98 * value;
         set_Ylable();
@@ -91,11 +90,11 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
             0, vertical_div * vertical_mV_per_div / vertical_scale());
     });
 
-    ui->TriggerSlider->setValue(0);
-    ui->TriggerSlider->setPageStep(trigger_voltage_mV * 100 / max_voltage_mV);
-    ui->TriggerSlider->setMaximum(100);
+    TriggerSlider->setValue(0);
+    TriggerSlider->setPageStep(trigger_voltage_mV * 100 / max_voltage_mV);
+    TriggerSlider->setMaximum(100);
     // 0<=value<=100
-    connect(ui->TriggerSlider, &QSlider::sliderMoved, [this](int value) {
+    connect(TriggerSlider, &QSlider::sliderMoved, [this](int value) {
         // 0<=trigger_voltage<=max_voltage
         trigger_voltage_mV = max_voltage_mV * value / 100;
     });
@@ -117,13 +116,12 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
 
 // 定时器溢出处理槽函数。用来生成曲线的坐标数据。
 void MainWindow::TimeData_Update(void) {
-    // Slide_Window &sw = Slide_Window::get_instance();
     if (seq.size() < 2) {
         return;
     }
 
     QVector<double> x, y;
-    double time_ns = horizontal_div * scan_speed_ns_per_div;
+    double time_ns = 0;
     mtx.lock();
     auto trigger = seq.rbegin();
     // 寻找触发点
@@ -137,14 +135,16 @@ void MainWindow::TimeData_Update(void) {
             break;
         }
     }
-    for (int cnt = 0; cnt < horizontal_div * horizontal_point_per_div &&
-                      cnt * point_per_sampling() < seq.rend() - trigger;
+    int cnt;
+    for (cnt = 0; cnt < horizontal_div * horizontal_point_per_div &&
+                  cnt * point_per_sampling() < seq.rend() - trigger;
          cnt++) {
         x.push_back(time_ns / horizontal_scale());
         y.push_back(DAC(*(trigger + cnt * point_per_sampling())) /
                     vertical_scale());
-        time_ns -= scan_speed_ns_per_div / horizontal_point_per_div;
+        time_ns += scan_speed_ns_per_div / horizontal_point_per_div;
     }
+    seq.assign((trigger + (cnt - 1) * point_per_sampling()).base(), seq.end());
     mtx.unlock();
     Show_Plot(customPlot, x, y);
 }

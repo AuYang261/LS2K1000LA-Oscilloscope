@@ -32,6 +32,9 @@ class MainWindow : public QMainWindow {
     QCPGraph *pGraph1_1;
     // 绘图控件的指针
     QCustomPlot *customPlot;
+    QSlider *XAxisScaler;
+    QSlider *YAxisScaler;
+    QSlider *TriggerSlider;
     std::thread spi_thread;
     std::mutex mtx;
 
@@ -39,14 +42,14 @@ class MainWindow : public QMainWindow {
     const double max_voltage_mV = 3300;
     const int horizontal_div = 10;
     const int vertical_div = 8;
-    const int horizontal_point_per_div = 50;
+    const int horizontal_point_per_div = 100;
     int vertical_mV_per_div = 500;
     const double RT_sampling_rate = 100 * 1000;                 // 100kHz
     const double Equivalent_sampling_rate = 200 * 1000 * 1000;  // 200MHz
     double scan_speed_ns_per_div = 20 * 1000 * 1000;
     double trigger_voltage_mV = 100;
     const double trigger_timeout_ns = 50 * 1000 * 1000;  // 50ms
-    QVector<double> seq;
+    std::vector<double> seq;
 
     double horizontal_scale() const {
         if (horizontal_div * scan_speed_ns_per_div < 1000) {
