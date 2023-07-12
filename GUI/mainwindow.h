@@ -7,6 +7,7 @@
 
 // #include "../slide_window.h"
 #include "../spi.h"
+#include "pwm.h"
 #include "qcustomplot.h"
 
 QT_BEGIN_NAMESPACE
@@ -35,14 +36,20 @@ class MainWindow : public QMainWindow {
     QSlider *XAxisScaler;
     QSlider *YAxisScaler;
     QSlider *TriggerSlider;
+    QSlider *PWM_freq;
+    QPushButton *SaveBtn;
+    QPushButton *LoadBtn;
+    QPushButton *TriggerBtn;
     std::thread spi_thread;
     std::mutex mtx;
+    bool sample_to_seq = true;
+    bool status_single_trigger = false;
 
     const uint max_sample_value = 0xfff;
     const double max_voltage_mV = 3300;
     const int horizontal_div = 10;
     const int vertical_div = 8;
-    const int horizontal_point_per_div = 100;
+    const int horizontal_point_per_div = 500;
     int vertical_mV_per_div = 500;
     const double RT_sampling_rate = 100 * 1000;                 // 100kHz
     const double Equivalent_sampling_rate = 200 * 1000 * 1000;  // 200MHz

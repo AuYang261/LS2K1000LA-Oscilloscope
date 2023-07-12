@@ -20,6 +20,7 @@ SOURCES += \
     ../spi.cpp \
     main.cpp \
     mainwindow.cpp \
+    pwm.cpp \
     qcustomplot.cpp
 
 HEADERS += \
@@ -27,6 +28,7 @@ HEADERS += \
     ../spi.h \
     ../types.h \
     mainwindow.h \
+    pwm.h \
     qcustomplot.h
 
 FORMS += \

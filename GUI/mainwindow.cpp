@@ -13,9 +13,11 @@ void MainWindow::spi_get_data() {
         for (size_t i = 0; i < sizeof(buf) / sizeof(buf[0]); i++) {
             buf[i] >>= 1;
             buf[i] &= 0xfff;
-            mtx.lock();
-            seq.push_back(buf[i]);
-            mtx.unlock();
+            if (sample_to_seq) {
+                mtx.lock();
+                seq.push_back(buf[i]);
+                mtx.unlock();
+            }
         }
         // cnt += sizeof(buf) / sizeof(buf[0]);
         do {
@@ -34,15 +36,27 @@ void MainWindow::spi_get_data() {
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow) {
-    qDebug() << "MainWindow init" << endl;
+    printf("%s init\n", __FUNCTION__);
     ui->setupUi(this);
-    spi_init();
-    // Slide_Window::get_instance().init();
+    if (spi_init() < 0) {
+        std::cout << "spi_init error" << std::endl;
+        return;
+    }
+    printf("%s\n", __FUNCTION__);
+    if (PWM_init() < 0) {
+        std::cout << "PWM_init error" << std::endl;
+        return;
+    }
+    PWM_set(1000, 10 + 1000 / 200);
 
     customPlot = ui->customPlot;
     XAxisScaler = ui->XAxisScaler;
     YAxisScaler = ui->YAxisScaler;
     TriggerSlider = ui->TriggerSlider;
+    PWM_freq = ui->PWM_freq;
+    SaveBtn = ui->SaveBtn;
+    LoadBtn = ui->LoadBtn;
+    TriggerBtn = ui->TriggerBtn;
 
     spi_thread = std::thread(&MainWindow::spi_get_data, this);
 
@@ -65,7 +79,6 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
         0, horizontal_div * scan_speed_ns_per_div / horizontal_scale());
     XAxisScaler->setMaximum(100);
     XAxisScaler->setValue(100);
-    XAxisScaler->setPageStep(1);
     // 0<=value<=100
     connect(XAxisScaler, &QSlider::sliderMoved, [this](int value) {
         // 100<=scan_speed_ns_per_div<=20*1000*1000
@@ -80,7 +93,6 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
         0, vertical_div * vertical_mV_per_div / vertical_scale());
     YAxisScaler->setMaximum(100);
     YAxisScaler->setValue(100);
-    YAxisScaler->setPageStep(1);
     // 0<=value<=100
     connect(YAxisScaler, &QSlider::sliderMoved, [this](int value) {
         // 2<=vertical_mV_per_div<=500
@@ -90,14 +102,66 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
             0, vertical_div * vertical_mV_per_div / vertical_scale());
     });
 
-    TriggerSlider->setValue(0);
-    TriggerSlider->setPageStep(trigger_voltage_mV * 100 / max_voltage_mV);
     TriggerSlider->setMaximum(100);
+    TriggerSlider->setValue(0);
     // 0<=value<=100
     connect(TriggerSlider, &QSlider::sliderMoved, [this](int value) {
         // 0<=trigger_voltage<=max_voltage
         trigger_voltage_mV = max_voltage_mV * value / 100;
     });
+
+    PWM_freq->setMinimum(0);
+    PWM_freq->setMaximum(10 * 1000);
+    PWM_freq->setValue(1000);
+    // 0<=value<=10k
+    connect(PWM_freq, &QSlider::sliderMoved, [this](int value) {
+        // 10<=freq<=10kHz, 10%<=duty_cycle<=60%
+        PWM_set(10 + value, 10 + value / 200);
+    });
+
+    connect(SaveBtn, &QPushButton::clicked, [this](bool checked) {
+        QFile file("./saved_wave.txt");
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            qDebug() << file.errorString();
+        };
+        QTextStream out(&file);
+        mtx.lock();
+        for (auto &num : seq) {
+            out << num << ' ';
+        }
+        mtx.unlock();
+        file.close();
+        std::cout << "saved" << std::endl;
+    });
+
+    connect(LoadBtn, &QPushButton::clicked, [this](bool checked) {
+        if (sample_to_seq) {
+            QFile file("./saved_wave.txt");
+            if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                qDebug() << file.errorString();
+            };
+            QTextStream in(&file);
+            mtx.lock();
+            seq.clear();
+            while (!in.atEnd()) {
+                decltype(seq)::value_type num;
+                in >> num;
+                seq.push_back(num);
+            }
+            mtx.unlock();
+            sample_to_seq = false;
+            file.close();
+            LoadBtn->setText(
+                QCoreApplication::translate("MainWindow", "Sample", nullptr));
+        } else {
+            sample_to_seq = true;
+            LoadBtn->setText(
+                QCoreApplication::translate("MainWindow", "Load", nullptr));
+        }
+    });
+
+    connect(TriggerBtn, &QPushButton::clicked,
+            [this](bool checked) { status_single_trigger = true; });
 
     // 显示图表的图例
     customPlot->legend->setVisible(true);
@@ -110,7 +174,7 @@ void MainWindow::QPlot_init(QCustomPlot *customPlot) {
 
     // 创建定时器，用于定时生成曲线坐标点数据
     QTimer *timer = new QTimer(this);
-    timer->start(100);
+    timer->start(200);
     connect(timer, SIGNAL(timeout()), this, SLOT(TimeData_Update()));
 }
 
@@ -129,9 +193,15 @@ void MainWindow::TimeData_Update(void) {
            trigger - seq.rbegin() <
                trigger_timeout_ns * RT_sampling_rate / 1000 / 1000 / 1000;
          trigger++) {
-        if (DAC(*trigger) > trigger_voltage_mV &&
-            DAC(*(trigger + 1)) <= trigger_voltage_mV) {
+        if (DAC(*trigger) < trigger_voltage_mV &&
+            DAC(*(trigger + 1)) >= trigger_voltage_mV) {
             // 触发
+            if (status_single_trigger) {
+                mtx.unlock();
+                SaveBtn->click();
+                mtx.lock();
+                status_single_trigger = false;
+            }
             break;
         }
     }
