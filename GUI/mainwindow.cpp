@@ -225,13 +225,8 @@ void MainWindow::Show_Plot(QCustomPlot *customPlot, QVector<double> x,
     static double cnt;
 
     cnt++;
-    // 给曲线添加数据
-    //    pGraph1_1->addData(cnt, num);
     pGraph1_1->setData(x, y);
 
-    // 更新绘图，这种方式在高填充下太浪费资源。有另一种方式rpQueuedReplot，可避免重复绘图。
-    // 最好的方法还是将数据填充、和更新绘图分隔开。将更新绘图单独用定时器更新。例程数据量较少没用单独定时器更新，实际工程中建议大家加上。
-    // customPlot->replot();
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 
     static QTime time(QTime::currentTime());
